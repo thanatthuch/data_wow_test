@@ -94,7 +94,7 @@ create_table = PostgresOperator(
 )
 
 #################################################################################### TABLE Truncate
-tuncateCommand=f"TRUNCATE TABLE IF NOT EXISTS {targetTable};"
+tuncateCommand=f"TRUNCATE TABLE {targetTable};"
 truncate_table = PostgresOperator(
     task_id="truncate_table",
     sql=tuncateCommand,
