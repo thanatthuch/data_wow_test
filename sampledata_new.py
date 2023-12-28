@@ -25,7 +25,7 @@ targetSchema    : dict = {
 targetPartition :str = "create_at"
 
 
-connection : str = "postgres_default"
+
 
 defaultArgs : dict = {
     'owner': 'airflow',
@@ -33,7 +33,7 @@ defaultArgs : dict = {
     'email_on_failure': False,
     'email_on_retry': False,
 }
-pg_hook_load = PostgresHook(postgres_conn_id=connection)
+
 
 
 
@@ -46,30 +46,8 @@ dag = DAG(
     schedule_interval=None
 )
 
-#################################################################################### TABLE Creation
-createCommand=f"""CREATE TABLE IF NOT EXISTS {targetTable} (
-    department_name VARCHAR(32),
-    sensor_serial VARCHAR(64),
-    create_at TIMESTAMP,
-    product_name VARCHAR(16),
-    product_expire TIMESTAMP)"""
 
-create_table = PostgresOperator(
-    task_id="create_table",
-    sql=createCommand,
-    dag=dag
-)
-
-#################################################################################### TABLE Truncate
-tuncateCommand=f"TRUNCATE TABLE {targetTable};"
-truncate_table = PostgresOperator(
-    task_id="truncate_table",
-    sql=tuncateCommand,
-    dag=dag
-)
-
-
-#################################################################################### FILE Transformation
+#################################################################################### FILE Transformation Task1
 def file_transform():
     data_files = os.listdir(sourcePath)
     data_files.sort()
@@ -89,25 +67,56 @@ transformation = PythonOperator(
     dag=dag
 )
 
-#################################################################################### Loading state
+
+#################################################################################### TABLE Creation Task2
+createCommand=f"""CREATE TABLE IF NOT EXISTS {targetTable} (
+    department_name VARCHAR(32),
+    sensor_serial VARCHAR(64),
+    create_at TIMESTAMP,
+    product_name VARCHAR(16),
+    product_expire TIMESTAMP)"""
+
+create_table = PostgresOperator(
+    task_id="create_table",
+    sql=createCommand,
+    dag=dag
+)
+
+#################################################################################### TABLE Truncate Task3
+tuncateCommand=f"TRUNCATE TABLE {targetTable};"
+truncate_table = PostgresOperator(
+    task_id="truncate_table",
+    sql=tuncateCommand,
+    dag=dag
+)
+
+
+
+
+#################################################################################### Loading state Task4
+connection : str = "postgres_default"
+pg_hook_load = PostgresHook(postgres_conn_id=connection)
+
 def data_loading():
     data_files = os.listdir(sourceTransPath)
     data_files.sort()
     total_ingest_file = 0
+
+    sql_command = f"""COPY {targetTable} (department_name, sensor_serial, create_at, product_name, product_expire)
+        FROM stdin WITH CSV HEADER
+        DELIMITER as ','
+    """
+
     for file_name in data_files:
-        sql_command = f"""COPY {targetTable} (department_name, sensor_serial, create_at, product_name, product_expire)
-            FROM stdin WITH CSV HEADER
-            DELIMITER as ','
-        """
+
         file_path = f"{sourceTransPath}/{file_name}"
         # Open and execute the COPY command using the pg_hook
-        with open(file_path, 'r') as file:
-            pg_hook_load.copy_expert(sql=sql_command, filename=file_path)
+
+        pg_hook_load.copy_expert(sql=sql_command, filename=file_path)
         print(f"======================== `{file_name}` has loaded ========================")
         total_ingest_file += 1
 
     print(f"********************************** All files ingest SUCCEEDED  {total_ingest_file}**********************************")
-
 
 loading = PythonOperator(
     task_id='load_csv_into_table',
@@ -118,7 +127,6 @@ loading = PythonOperator(
 
 #################################################################################### PIPELINE ####################################################################################
 
-
 start = DummyOperator(
     task_id='start',
     dag=dag,
@@ -128,4 +136,5 @@ end = DummyOperator(
     task_id='end',
     dag=dag,
 )
+
 start >> transformation >> create_table >> truncate_table >> loading >> end
