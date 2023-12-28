@@ -1,140 +1,60 @@
-
-import os
+import string
+import numpy as np
 import pandas as pd
-from airflow import DAG
-from airflow.providers.postgres.operators.postgres import PostgresOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.utils.dates import days_ago
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.dummy_operator import DummyOperator
+import random
+import os
+import shutil
+import datetime as dt
+from tqdm import tqdm
 
+random.seed(0)
 
+def gen_text(number_of_item, long_of_text, text_list):
+    item_list = []
+    while len(item_list) < number_of_item :
+        item_name = ''.join(random.choices(text_list, k = long_of_text))
+        if item_name not in item_list:
+            item_list.append(item_name)
+    return item_list
 
+folder_name = 'data_sample'
+if  folder_name in os.listdir() :
+    shutil.rmtree(folder_name)
+os.mkdir(folder_name)
 
-# /* DECLARE argument */
-sourcePath      : str  = "data_sample"
-sourceTransPath : str  = "data_trans"
-targetTable     : str  = "demo_table"
-targetSchema    : dict = {
-    "department_name" : "varchar(32)",
-    "sensor_serial"   : "varchar(64)",
-    "create_at"       : "timestamp",
-    "product_name"    : "varchar(16)",
-    "product_expire"  : "timestamp"
-}
-targetPartition :str = "create_at"
+list_date = pd.date_range("2023-01-01", end='2023-01-31', freq="min")
+print('list_date : ',len(list_date))
+list_char = list(string.ascii_lowercase)
+column_template = ['department_name','sensor_serial','create_at','product_name','product_expire']
+number_of_department = 100
+sensor_in_department = [random.choices(range(5,30))[0] for i in range(number_of_department)]
+number_of_sensor = sum(sensor_in_department)
+number_of_product = 1000
+department_list = gen_text(number_of_item = number_of_department, long_of_text = 32, text_list = list_char)
+sensor_list = gen_text(number_of_item = number_of_sensor, long_of_text = 64, text_list = list_char)
+product_list = gen_text(number_of_item = number_of_product, long_of_text = 16, text_list = list_char)
 
+data_template = pd.DataFrame(columns=['department_name','sensor_serial'])
+for i in range(number_of_department):
+    d_name = department_list[i]
+    n_sensor = sensor_in_department[i]
+    check_list = list(data_template['sensor_serial'].unique())
+    a = [s for s in sensor_list if s not in check_list]
+    data_department = pd.DataFrame({
+        'department_name' : [d_name] * n_sensor
+        , 'sensor_serial' : random.choices(
+            [s for s in sensor_list if s not in check_list]
+            , k = n_sensor
+            )
+        })
+    data_template = pd.concat([data_template,data_department], ignore_index=True)
+del data_department
 
-
-
-defaultArgs : dict = {
-    'owner': 'airflow',
-    'start_date': days_ago(1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-}
-
-
-
-
-#################################################################################### Processing ####################################################################################
-
-dag = DAG(
-    'raw_ingestion',
-    default_args=defaultArgs,
-    description='ingest data to table',
-    schedule_interval=None
-)
-
-
-#################################################################################### FILE Transformation Task1
-def file_transform():
-    data_files = os.listdir(sourcePath)
-    data_files.sort()
-
-    if not os.path.exists(sourceTransPath):
-        os.mkdir(sourceTransPath)
-
-    for file_name in data_files:
-        new_file_name = file_name.replace("parquet", "csv")
-        temp_df = pd.read_parquet(sourcePath +"/" +file_name)
-        temp_df.to_csv(sourceTransPath +"/"+ new_file_name, index=False)
-        print(f"----- ------ ------ -----`{new_file_name}` Transformed ----- ------ ------ -----")
-
-transformation = PythonOperator(
-    task_id = "parquet_to_csv",
-    python_callable=file_transform,
-    dag=dag
-)
-
-
-#################################################################################### TABLE Creation Task2
-createCommand=f"""CREATE TABLE IF NOT EXISTS {targetTable} (
-    department_name VARCHAR(32),
-    sensor_serial VARCHAR(64),
-    create_at TIMESTAMP,
-    product_name VARCHAR(16),
-    product_expire TIMESTAMP)"""
-
-create_table = PostgresOperator(
-    task_id="create_table",
-    sql=createCommand,
-    dag=dag
-)
-
-#################################################################################### TABLE Truncate Task3
-tuncateCommand=f"TRUNCATE TABLE {targetTable};"
-truncate_table = PostgresOperator(
-    task_id="truncate_table",
-    sql=tuncateCommand,
-    dag=dag
-)
-
-
-
-
-#################################################################################### Loading state Task4
-connection : str = "postgres_default"
-pg_hook_load = PostgresHook(postgres_conn_id=connection)
-
-def data_loading():
-    data_files = os.listdir(sourceTransPath)
-    data_files.sort()
-    total_ingest_file = 0
-
-    sql_command = f"""COPY {targetTable} (department_name, sensor_serial, create_at, product_name, product_expire)
-        FROM stdin WITH CSV HEADER
-        DELIMITER as ','
-    """
-
-    for file_name in data_files:
-
-        file_path = f"{sourceTransPath}/{file_name}"
-        # Open and execute the COPY command using the pg_hook
-
-        pg_hook_load.copy_expert(sql=sql_command, filename=file_path)
-        print(f"======================== `{file_name}` has loaded ========================")
-        total_ingest_file += 1
-
-    print(f"********************************** All files ingest SUCCEEDED  {total_ingest_file}**********************************")
-
-loading = PythonOperator(
-    task_id='load_csv_into_table',
-    python_callable=data_loading,
-    dag=dag,
-)
-
-
-#################################################################################### PIPELINE ####################################################################################
-
-start = DummyOperator(
-    task_id='start',
-    dag=dag,
-)
-
-end = DummyOperator(
-    task_id='end',
-    dag=dag,
-)
-
-start >> transformation >> create_table >> truncate_table >> loading >> end
+for i in tqdm(range(len(list_date))):
+    data_date = data_template.copy()
+    create_at = list_date[i]
+    path = os.path.join(folder_name,str(create_at)) + '.parquet'
+    data_date['create_at'] = create_at
+    data_date['product_name'] = random.choices(product_list, k = number_of_sensor)
+    data_date['product_expire'] = list(map(lambda x : x + dt.timedelta(days = 90 - random.choices([1,2,3])[0]), data_date['create_at']))
+    data_date.to_parquet(path)
