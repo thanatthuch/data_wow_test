@@ -16,7 +16,7 @@ wait all process runing succeeded (can check on `docker ps` command)
 - open Airflow Ui on browser via link : http://localhost:8080
 - login username: `airflow`
 - login password: `airflow`
-![Alt text](./images/image.png)
+![Alt text](./images/image123.png)
 
 go to Navbar top, point to admin then choose connection to add DB connection
 ![Alt text](./images/image-1.png)
