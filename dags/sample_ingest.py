@@ -128,8 +128,8 @@ def data_loading():
     data_files.sort()
     total_ingest_file = 0
     for file_name in data_files:
-
-        sql_command = f"""COPY {targetTable} (department_name, sensor_serial, create_at, product_name, product_expire)
+        DAY = file_name.split("-")[-1]
+        sql_command = f"""COPY {targetTable}_{DAY} (department_name, sensor_serial, create_at, product_name, product_expire)
             FROM stdin WITH CSV HEADER
             DELIMITER as ','
         """
