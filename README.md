@@ -10,7 +10,7 @@
 
 - `docker-compose up -d`
 
-wait all process runing succeeded (can check on `docker ps` command)
+wait all process status `(healthy)` succeeded (can check on `docker ps` command)
 ![Alt text](./images/imagess.png)
 
 - open Airflow Ui on browser via link : http://localhost:8080
