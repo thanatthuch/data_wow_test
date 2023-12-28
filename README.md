@@ -71,9 +71,16 @@ Check the log files for each task to verify if they are running correctly as int
 ![Alt text](./images/image-11.png)
 
 #### Data validation
-Count scan
+#### Count scan
 
 ![Alt text](./images/image55.png)
-Basic scan
+
+
+#### Basic scan
 ![Alt text](./images/image-22.png)
+
+#### Table Schema
+![Alt text](./images/image.png)
+
+
 # Testing end - Thank you
