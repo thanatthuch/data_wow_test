@@ -1,7 +1,8 @@
 ./data_sample
-./logs/*
+./logs
 ./logs/dag_id=raw_ingestion
 ./logs/dag_processor_manager
 ./logs/scheduler
 *__pycache__
 *.log
+*.parquet
