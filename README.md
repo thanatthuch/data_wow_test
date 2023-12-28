@@ -1,12 +1,12 @@
 # data_wow_test
 
-STEP 1.
+## STEP 1 : Project preparation
 - `git clone https://github.com/thanatthuch/data_wow_test.git`
 - `cd data_wow_test`
 - `python3 sampledata_new.py`  (wait process has done)
 
 
-STEP 2.
+## STEP 2 : Start service
 
 - `docker-compose up -d`
 
